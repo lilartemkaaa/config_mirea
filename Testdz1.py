@@ -1,25 +1,33 @@
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 import tkinter as tk
 import sys
+import io
+
+# Импортируем основной класс приложения
+from konfig1 import CommandLineApp  # Замените your_script_name на имя файла, где хранится ваш код
+
 
 class TestCommandLineApp(unittest.TestCase):
-    @patch.object(tk.Tk, 'quit')
-    def test_exit_command(self, mock_quit):
-        # Создание фальшивого объекта Tk
-        root = tk.Tk()
+    def setUp(self):
+        # Создаем корневое окно Tkinter
+        self.root = tk.Tk()
+        self.app = CommandLineApp(self.root, path = 'example.zip')
 
-        # Инициализация приложения
-        app = CommandLineApp(root)
+    def tearDown(self):
+        self.root.destroy()
 
-        # Эмулируем ввод команды "exit" в поле
-        app.text_area.insert(tk.END, "exit")
+    @patch('sys.exit')  # Мокируем sys.exit для предотвращения реального выхода
+    def test_exit_command(self, mock_exit):
+        # Симулируем ввод команды "exit"
+        self.app.text_area.insert(tk.END, "exit\n")
+        self.app.process_command(None)
 
-        # Вызываем обработчик команды
-        app.process_command(None)
+        # Проверяем, что sys.exit был вызван
+        mock_exit.assert_called_once()
 
-        # Проверяем, что метод quit() был вызван для завершения работы
-        mock_quit.assert_called_once()
 
 if __name__ == "__main__":
     unittest.main()
+
+
