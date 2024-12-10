@@ -26,8 +26,8 @@ def build_new_path(base_path, additional_path):
 
 
 class CommandLineApp:
-    def __init__(self, root):
-        self.paths = get_paths_from_zip(sys.argv[1])
+    def __init__(self, root, path):
+        self.paths = get_paths_from_zip(path)
         print(*self.paths, sep="\n")
         self.current_path = self.paths[0][0].split("/")[0]
 
@@ -139,6 +139,7 @@ class CommandLineApp:
                     result += f"\ntail: no such file: {file_path}"
         elif cmd == "exit":
             self.root.quit()
+            sys.exit(0)
         elif cmd == "rmdir":
             dir_to_remove = args[0]
             path = build_new_path(self.current_path, dir_to_remove)  # Получаем путь до удаляемой папки
@@ -159,5 +160,5 @@ class CommandLineApp:
 
 if __name__ == "__main__":
     root = tk.Tk()
-    app = CommandLineApp(root)
+    app = CommandLineApp(root, path = sys.argv[1])
     root.mainloop()
