@@ -1,0 +1,145 @@
+import os
+import argparse
+from typing import Dict, List
+from datetime import datetime, timezone, timedelta
+from git import Repo
+
+
+class GitEntity:
+    def __init__(self, identifier: str, entity_type: str, content_data: bytes):
+        self.sha1 = identifier
+        self.type = entity_type
+        self.content = content_data.decode('utf-8', errors='replace')
+
+
+class RevisionNode:
+    def __init__(self, identifier: str, committer: str, parent_ids: List[str], modified_files: List[str]):
+        self.sha1 = identifier
+        self.author = committer
+        self.parents = parent_ids
+        self.files = modified_files
+
+
+def configure_settings(config_file_path, repository_dir, output_dir, output_file) -> Dict[str, str]:
+    settings_dictionary = {
+        'graphviz_path': config_file_path,
+        'repo_path': repository_dir,
+        'output_path': output_dir,
+        'file_name': output_file,
+    }
+    return settings_dictionary
+
+
+def retrieve_entity(repository_dir: str, identifier: str) -> GitEntity:
+    import subprocess
+
+    result = subprocess.run(
+        ['git', 'cat-file', '-p', identifier],
+        cwd=repository_dir,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True
+    )
+
+    if result.returncode != 0:
+        raise FileNotFoundError(f"Entity '{identifier}' not found.")
+
+    # Determine the type of the entity
+    type_result = subprocess.run(
+        ['git', 'cat-file', '-t', identifier],
+        cwd=repository_dir,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True
+    )
+
+    entity_type = type_result.stdout.strip()
+
+    return GitEntity(identifier, entity_type, result.stdout.encode('utf-8'))
+
+
+def analyze_commit(entity: GitEntity, repository_dir: str) -> RevisionNode:
+    lines = entity.content.split('\n')
+    parent_ids = []
+    committer = ''
+    for line in lines:
+        if line.startswith('parent '):
+            parent_ids.append(line[7:])
+        elif line.startswith('author '):
+            author_info = line[7:]
+            author_parts = author_info.rsplit(' ', 2)
+            author_name = author_parts[0]
+            committer = author_name
+
+    commit_identifier = entity.sha1
+    commit_instance = Repo(repository_dir).commit(commit_identifier)
+    modified_files = [f for f in commit_instance.stats.files.keys()]
+    return RevisionNode(entity.sha1, committer, parent_ids, modified_files)
+
+def build_commit_graph(repo_path: str, file_name: str) -> Dict[str, RevisionNode]:
+    #from git import Repo
+    repo = Repo(repo_path)
+    commits_sha1 = []
+    for commit in repo.iter_commits():
+        if file_name in commit.stats.files:
+            commits_sha1.append(commit.hexsha)
+
+    graph = {}
+    for commit_sh1 in commits_sha1:
+        obj = retrieve_entity(repo_path, commit_sh1)
+        commit_node = analyze_commit(obj, repo_path)
+        graph[commit_sh1] = commit_node
+    return graph
+
+
+def generate_dot(graph: Dict[str, RevisionNode]) -> str:
+    dot = 'digraph G {\n'
+    dot += '  rankdir=LR;\n'
+    dot += '  node [shape=box, style=filled, color="lightblue"];\n'  # Добавлены стили для узлов
+    dot += '  edge [color="gray"];\n'  # Добавлены стили для ребер
+
+    for sha1, node in graph.items():
+        label = f"{node.sha1[:7]}\\n{node.author}\\n Files: {', '.join(node.files)}"
+        dot += f'  "{sha1}" [label="{label}"];\n'
+        for parent_sha1 in node.parents:
+            if parent_sha1 in graph:
+                dot += f'  "{sha1}" -> "{parent_sha1}";\n'
+    dot += '}\n'
+    return dot
+
+
+def write_dot_file(dot_content: str, dot_path: str) -> None:
+    with open(dot_path, 'w') as f:
+        f.write(dot_content)
+
+
+def generate_graph_image(graphviz_path: str, dot_path: str, output_path: str, layout: str = 'dot') -> None:
+    import subprocess
+    subprocess.run([graphviz_path, '-K', layout, '-Tpng', dot_path, '-o', output_path], check=True)
+
+
+def main(args) -> None:
+    # Parse configuration
+    config = configure_settings(args.graphviz_path, args.repo_path, args.output_path, args.file_name)
+    # Build commit graph
+    graph = build_commit_graph(config['repo_path'], config["file_name"])
+
+    # Generate DOT file
+    dot_content = generate_dot(graph)
+    dot_path = os.path.join(os.path.dirname(config['output_path']), 'graph.dot')
+    write_dot_file(dot_content, dot_path)
+
+    # Generate graph image
+    generate_graph_image(config['graphviz_path'], dot_path, config['output_path'])
+
+    print("Graph generated successfully.")
+
+
+if __name__ == '__main__':
+    pars = argparse.ArgumentParser(description='Git Commit Dependency Graph Visualizer')
+    pars.add_argument('graphviz_path', help='Path to the graphviz output file')
+    pars.add_argument('repo_path', help='Path to the repository')
+    pars.add_argument('output_path', help='Path to the output file')
+    pars.add_argument('file_name', help='File name')
+    args = pars.parse_args()
+    main(args)
