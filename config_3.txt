@@ -1,0 +1,15 @@
+# Bakery Configuration
+name := "Bakery"  # Name of the bakery
+products := [ "Bread"; "Croissants"; "Buns" ]  # List of products
+bread_price := 100  # Price of bread
+croissant_price := 50  # Price of croissant
+# Calculating the discount
+discount := @(bread_price) - @(croissant_price)  # Discount calculation (bread price - croissant price)
+# Game Configuration
+player := "Player 1"  # Name of the player
+levels := [ "Forest"; "Cave"; "Castle" ]  # List of game levels
+weapons := [ "Sword"; "Bow"; "Shield" ]  # List of available weapons
+health := 100  # Health points of the player
+attack := 50  # Attack points of the player
+# Calculating total power
+total_power := @(attack) + @(health)  # Total power calculation (attack + health)
